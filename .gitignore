@@ -1,3 +1,7 @@
+# conditional BERT caches
+aug_data/
+save_model_dir/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
