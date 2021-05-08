@@ -27,17 +27,9 @@ def read_file(input_file, labels):
 	return df
 
 
-def CheckAgreement(ex, min_agreement, all_emotions, max_agreement=100):
-	"""Return the labels that at least min_agreement raters agree on."""
-	sum_ratings = ex[all_emotions].sum(axis=0)
-	agreement = ((sum_ratings >= min_agreement) & (sum_ratings <= max_agreement))
-	return ",".join(sum_ratings.index[agreement].tolist())
-
-
-def CountLabels(labels):
-	if (not isinstance(labels, float)) and labels:
-		return len(labels.split(","))
-	return 0
+def write_label_distributions(output_file, data, labels):
+	df = data[labels].sum(axis=0).sort_values(ascending=False)/len(data) * 100
+	df.to_json(output_file)
 
 
 def main():
@@ -48,6 +40,7 @@ def main():
 											help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
 	parser.add_argument("--label_file", default="labels.txt", type=str)
 	parser.add_argument("--train_file", default="train.tsv", type=str)
+	parser.add_argument("--label_distributions", default="label_distributions.json", type=str)
 	parser.add_argument("--sentiment_dict", default="sentiment_dict.json", type=str)
 	parser.add_argument("--output_dir", default="dataset_analysis", type=str,
 											help="Directory for saving plots and analyses.")
@@ -77,6 +70,9 @@ def main():
 	print("Label distributions:")
 	print((data[all_emotions].sum(axis=0).sort_values(ascending=False) /
 				 len(data) * 100).round(2))
+	write_label_distributions(os.path.join(args.data_dir, args.label_distributions), 
+								data,
+								all_emotions)
 
 	print("Plotting label correlations...")
 	ratings = data.groupby("id")[all_emotions].mean()
