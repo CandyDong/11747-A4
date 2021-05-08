@@ -31,38 +31,67 @@
 	*	pride              0.26
 	*	grief              0.18
 '''
+import json
+import os
+import argparse
+import pandas as pd
+
 def read_file(input_file, labels):
 	"""Reads a tab separated value file."""
 	df = pd.read_csv(input_file, 
 						encoding="utf-8", 
-						sep='\t',
+						sep='\t', 
 						names=["text", "label", "id"])
-	label_dict = {str(i): v for i, v in enumerate(labels)}
-	df["label"] = df["label"].apply(lambda x: ",".join(label_dict[l] for l in x.split(",")))
-	df = pd.concat([df, df['label'].str.get_dummies(sep=',')], axis=1)
-	df.drop(["label"], axis=1, inplace=True)
+	m = df["label"].isin(labels)
+	df = df[m]
 	return df
+
+def save_file(output_file, df):
+	df.to_csv(output_file, sep = '\t', index=False, header=False)
 
 
 def main():
 	parser = argparse.ArgumentParser()
 
-    ## Required parameters
-    parser.add_argument("--data_dir", default="data/original", type=str,
-                        help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
-    parser.add_argument("--label_file", default="labels.txt", type=str)
-    parser.add_argument("--threshold", default=0.03, type=float,
-    					help="Only collect data with label distribution smaller than the threshold")
-    parser.add_argument("--suffix", default="_cbert", type=str)
-    parser.add_argument("--output_dir", default="data/original", type=str,
-                        help="The output dir for sub-dataset.")
-    args = parser.parse_args()
-    print(args)
+	## Required parameters
+	parser.add_argument("--data_dir", default="data/original", type=str,
+						help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
+	parser.add_argument("--label_file", default="labels.txt", type=str)
+	parser.add_argument("--train_file", default="train.tsv", type=str)
+	parser.add_argument("--label_distributions", default="label_distributions.json", type=str)
+	parser.add_argument("--threshold", default=3, type=float,
+						help="Only collect data with label distribution smaller than the threshold")
+	parser.add_argument("--suffix", default="cbert", type=str)
+	parser.add_argument("--output_dir", default="data/original", type=str,
+						help="The output dir for sub-dataset.")
+	args = parser.parse_args()
+	print(args)
 
+	with open(os.path.join(args.data_dir, args.label_distributions)) as json_file:
+		distributions = json.load(json_file)
 
+	with open(os.path.join(args.data_dir, args.label_file), "r") as f:
+		all_emotions = f.read().splitlines()
+
+	labels = []
+	for i, e in enumerate(all_emotions):
+		if distributions[e] < args.threshold: labels.append(str(i))
+
+	print("++++++++++++++++++++++++++++labels++++++++++++++++++++++++++++")
+	for label in labels:
+		print(all_emotions[int(label)])
+
+	df = read_file(os.path.join(args.data_dir, args.train_file), labels)
+	print("{} training examples".format(len(df)))
+	save_file(os.path.join(args.data_dir, "train_{}.tsv".format(args.suffix)), df)
+
+	df = pd.concat([df,  
+					df["label"].apply(lambda x: ",".join(all_emotions[int(i)] for i in x.split(","))).reset_index(name="label_name")], 
+					axis=1)
+	print(df.groupby(['label_name']).size().sort_values(ascending=False))
 
 
 if __name__ == "__main__":
-    main()
+	main()
 
 
