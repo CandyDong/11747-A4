@@ -1,6 +1,7 @@
-# conditional BERT caches
-aug_data/
-save_model_dir/
+# caches
+ckpt/
+data/original/cached_*
+cbert_model/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

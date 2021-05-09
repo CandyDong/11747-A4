@@ -36,18 +36,20 @@ def main():
     parser.add_argument("--data_dir", default="data/original", type=str,
                         help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
     parser.add_argument("--label_file", default="labels.txt", type=str)
-    parser.add_argument("--output_dir", default="aug_data", type=str,
-                        help="The output dir for augmented dataset.")
     parser.add_argument("--save_model_dir", default="cbert_model", type=str,
                         help="The cache dir for saved model.")
     parser.add_argument("--bert_model", default="bert-base-cased", type=str,
                         help="The path of pretrained bert model.")
-    parser.add_argument("--max_seq_length", default=64, type=int,
+    # parser.add_argument("--max_seq_length", default=64, type=int,
+    #                     help="The maximum total input sequence length after WordPiece tokenization. \n"
+    #                          "Sequence longer than this will be truncated, and sequences shorter \n"
+    #                          "than this wille be padded.")
+    parser.add_argument("--max_seq_length", default=50, type=int,
                         help="The maximum total input sequence length after WordPiece tokenization. \n"
                              "Sequence longer than this will be truncated, and sequences shorter \n"
                              "than this wille be padded.")
     parser.add_argument("--train_batch_size", default=32, type=int,
-                        help="Total batch size for training.")
+                        help="Total batch size for training.") 
     parser.add_argument("--learning_rate", default=5e-5, type=float,
                         help="The initial learning rate for Adam.")
     parser.add_argument("--num_train_epochs", default=10.0, type=float,
@@ -61,8 +63,6 @@ def main():
 
     args = parser.parse_args()
     print(args)
-
-    os.makedirs(args.output_dir, exist_ok=True)
     
     """prepare processors"""
     processor = AugProcessor(args)
@@ -86,6 +86,8 @@ def main():
     logger.info("Token type embedding layer: {}".format(model.bert.embeddings.token_type_embeddings))
 
     train_examples = processor.get_train_examples()
+
+    logger.info("  Num train examples = %d", len(train_examples))
     train_features, num_train_steps, train_dataloader = \
         construct_train_dataloader(train_examples, label_list, args.max_seq_length, 
         args.train_batch_size, args.num_train_epochs, tokenizer, device)
@@ -108,9 +110,9 @@ def main():
     optimizer = AdamW(optimizer_grounded_parameters, lr=args.learning_rate, correct_bias=False)
     model.train()
 
-    os.makedirs(args.save_model_dir, exist_ok=True)
-    if not os.path.exists(args.save_model_dir):
-        os.mkdir(args.save_model_dir)
+    if os.path.exists(args.save_model_dir):
+        shutil.rmtree(args.save_model_dir)
+    os.makedirs(args.save_model_dir)
 
     for e in trange(int(args.num_train_epochs), desc="Epoch"):
         avg_loss = 0.
@@ -121,8 +123,10 @@ def main():
             _, input_ids, input_mask, segment_ids, masked_ids = batch
             """train generator at each batch"""
             optimizer.zero_grad() 
-            outputs = model(input_ids, input_mask, segment_ids,
-                    labels=masked_ids)
+            outputs = model(input_ids, 
+                            input_mask, 
+                            segment_ids,
+                            masked_lm_labels=masked_ids)
             loss = outputs[0]
             loss.backward()
             avg_loss += loss.item()
@@ -131,7 +135,7 @@ def main():
                 print("avg_loss: {}".format(avg_loss / 50))
                 avg_loss = 0
         if args.save_every_epoch:
-            save_model_name = "BertForMaskedLM_epoch_" + str(e + 1)
+            save_model_name = "{}_{}".format(args.bert_model, e)
             save_model_path = os.path.join(args.save_model_dir, save_model_name)
             torch.save(model, save_model_path)
         else:

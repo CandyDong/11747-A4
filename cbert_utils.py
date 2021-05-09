@@ -44,7 +44,7 @@ class AugProcessor(object):
     def get_train_examples(self):
         """See base calss."""
         return self._create_examples(
-            self._read_tsv(os.path.join(self.args.data_dir, "train.tsv")), "train")
+            self._read_tsv(os.path.join(self.args.data_dir, "train_cbert.tsv")), "train")
 
     def get_dev_examples(self):
         """See base class."""
@@ -57,6 +57,13 @@ class AugProcessor(object):
             for line in f:
                 labels.append(line.rstrip())
         return [str(i) for i in range(len(labels))]
+
+    def get_labels_text(self):
+        labels = []
+        with open(os.path.join(self.args.data_dir, self.args.label_file), "r", encoding="utf-8") as f:
+            for line in f:
+                labels.append(line.rstrip())
+        return labels
     
     def _create_examples(self, lines, set_type):
         """Create examples for the training and dev sets."""
