@@ -14,7 +14,18 @@ import shutil
 
 from transformers import BertTokenizer
 
-from cbert_utils import rev_wordpiece
+def rev_wordpiece(str):
+    """wordpiece function used in cbert"""
+    
+    #print(str)
+    if len(str) > 1:
+        for i in range(len(str)-1, 0, -1):
+            if str[i] == '[PAD]':
+                str.remove(str[i])
+            elif len(str[i]) > 1 and str[i][0]=='#' and str[i][1]=='#':
+                str[i-1] += str[i][2:]
+                str.remove(str[i])
+    return " ".join(str)
 
 def read_file(input_file, with_id=False):
 	"""Reads a tab separated value file."""

@@ -3,7 +3,7 @@
   "data_dir": "data/original",
   "ckpt_dir": "ckpt/original",
   "output_dir": "bert-base-cased-goemotions-original",
-  "train_file": "train_merge.tsv", // This is the augmented training file
+  "train_file": "train.tsv",
   "dev_file": "dev.tsv",
   "test_file": "test.tsv",
   "label_file": "labels.txt",
@@ -23,8 +23,7 @@
   "max_grad_norm": 1.0,
   "no_cuda": false,
   "model_type": "bert",
-  // "model_name_or_path": "bert-base-cased",
-  "model_name_or_path": "bert-base-uncased",
+  "model_name_or_path": "bert-base-cased",
   "tokenizer_name_or_path": "monologg/bert-base-cased-goemotions-original",
   "seed": 42,
   "train_batch_size": 16,
