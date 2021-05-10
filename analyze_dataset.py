@@ -13,17 +13,25 @@ from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import pdist
 import seaborn as sns
 
-def read_file(input_file, labels):
+def read_file(input_file, labels, label_dict, with_id=True):
 	"""Reads a tab separated value file."""
+	names=["text", "label"]
+	if with_id: names.append("id")
+
 	df = pd.read_csv(input_file, 
 						encoding="utf-8", 
 						sep='\t',
-						names=["text", "label", "id"])
+						names=names)
 	# print(df)
-	label_dict = {str(i): v for i, v in enumerate(labels)}
-	df["label"] = df["label"].apply(lambda x: ",".join(label_dict[l] for l in x.split(",")))
+	if with_id:
+		df["label"] = df["label"].apply(lambda x: ",".join(label_dict[l] for l in x.split(",")))
+	else:
+		df["label"] = df["label"].map(label_dict)
 	df = pd.concat([df, df['label'].str.get_dummies(sep=',')], axis=1)
-	df.drop(["label"], axis=1, inplace=True)
+
+	if with_id:
+		# do not drop the label column for analysis on aug-ed dataset
+		df.drop(["label"], axis=1, inplace=True)
 	return df
 
 
@@ -32,6 +40,24 @@ def write_label_distributions(output_file, data, labels):
 	df.to_json(output_file)
 
 
+def analyze_aug(args, labels):
+	label_dict = {i: v for i, v in enumerate(labels)}
+	df = read_file(os.path.join(args.data_dir, args.aug_file), 
+					labels,
+					label_dict,
+					with_id=False)
+	print(df.head(8))
+
+	aug_labels = df.label.unique()
+
+	print("++++++++++++++++++Data loaded++++++++++++++++++++++")
+	print("{} augmented training examples".format(len(df)))
+	print("Labels: {}".format(aug_labels))
+
+	print("Label distributions:")
+	print((df[aug_labels].sum(axis=0).sort_values(ascending=False) /
+				 len(df) * 100).round(2))
+
 def main():
 	parser = argparse.ArgumentParser()
 
@@ -39,6 +65,10 @@ def main():
 	parser.add_argument("--data_dir", default="data/original", type=str,
 											help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
 	parser.add_argument("--label_file", default="labels.txt", type=str)
+	parser.add_argument("--aug", action='store_true',
+						help="Whether or not to run analysis on the augmented part of the dataset") # default to False
+	parser.add_argument("--aug_file", default="train_aug_9_sanitized.tsv", type=str,
+						help="Only used when `aug` flag is set to True")
 	parser.add_argument("--train_file", default="train.tsv", type=str)
 	parser.add_argument("--label_distributions", default="label_distributions.json", type=str)
 	parser.add_argument("--sentiment_dict", default="sentiment_dict.json", type=str)
@@ -51,12 +81,19 @@ def main():
 	if not os.path.exists(args.output_dir):
 		os.makedirs(args.output_dir)
 
-	print("++++++++++++++++++Loading data++++++++++++++++++++++")
+	print("++++++++++++++++++Loading Labels++++++++++++++++++++++")
 	with open(os.path.join(args.data_dir, args.label_file), "r") as f:
 		all_emotions = f.read().splitlines()
 	print("%d emotion categories" % len(all_emotions))
 
-	data = read_file(os.path.join(args.data_dir, args.train_file), all_emotions)
+	if args.aug:
+		analyze_aug(args, all_emotions)
+		return
+
+	label_dict = {str(i): v for i, v in enumerate(labels)}
+	data = read_file(os.path.join(args.data_dir, args.train_file), 
+					all_emotions,
+					label_dict)
 	print(data.head(8))
 	print("++++++++++++++++++Data loaded++++++++++++++++++++++")
 	print("{} training examples".format(len(data)))

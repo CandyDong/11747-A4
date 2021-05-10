@@ -46,14 +46,16 @@ def main():
 						help="The input data dir. Should contain the .tsv files (or other data files) for the task.")
 	parser.add_argument("--bert_model", default="bert-base-cased", type=str)
 	parser.add_argument("--aug_data_file", default="train_aug_9.tsv", type=str)
+	parser.add_argument("--aug_sanitized_file", default="train_aug_9_sanitized.tsv", type=str,
+						help="Where to save the sanitized aug file (corrected tokens + duplicate removed)")
 	parser.add_argument("--cbert_data_file", default="train_original_9.tsv", type=str)
 	parser.add_argument("--train_data_file", default="train.tsv", type=str)
 	parser.add_argument("--merged_data_file", default="train_merge.tsv", type=str)
 	args = parser.parse_args()
 	print(args)
 
-	tokenizer = BertTokenizer.from_pretrained(args.bert_model)
-	sent = tokenizer._tokenize("’ s a shame [ NAME ] doesn ’ t get more duis with the amount he needed to")
+	# tokenizer = BertTokenizer.from_pretrained(args.bert_model)
+	# sent = tokenizer._tokenize("’ s a shame [ NAME ] doesn ’ t get more duis with the amount he needed to")
 
 	# for token, length, real_token in zip(["[N##AM##E]", "[R##EL##IG##ION]"], 
 	# 											[5, 6],
@@ -77,6 +79,11 @@ def main():
 				os.path.join(args.data_dir, args.merged_data_file))
 	merged_data_file = open(os.path.join(args.data_dir, args.merged_data_file), 'a')
 	merged_tsv_writer = csv.writer(merged_data_file, delimiter='\t')
+
+	if os.path.exists(os.path.join(args.data_dir, args.aug_sanitized_file)):
+		os.remove(os.path.join(args.data_dir, args.aug_sanitized_file))
+	sanitized_data_file = open(os.path.join(args.data_dir, args.aug_sanitized_file), 'w')
+	sanitized_tsv_writer = csv.writer(sanitized_data_file, delimiter='\t')
 
 	tokenizer = BertTokenizer.from_pretrained(args.bert_model)
 
@@ -121,10 +128,12 @@ def main():
 
 		aug_sent = rev_wordpiece(aug_sent_tokenized)
 		# print("aug_sent: \n{}".format(aug_sent))
+		
 		merged_tsv_writer.writerow([aug_sent, label, sent_id])
+		sanitized_tsv_writer.writerow([aug_sent, label])
 		count += 1
 
-	print("Augmented training dataset by {} traing examples".format(count))
+	print("Augmented training dataset by {} training examples".format(count))
 	
 if __name__ == "__main__":
 	main()
