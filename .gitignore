@@ -2,6 +2,10 @@
 ckpt/
 data/original/cached_*
 cbert_model/
+ssa_BERT/glue_data/
+ssa_BERT/bert_models/
+ssa_BERT/results/
+ssa_BERT/ckpt/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
