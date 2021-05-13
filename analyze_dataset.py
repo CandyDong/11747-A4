@@ -90,7 +90,7 @@ def main():
 		analyze_aug(args, all_emotions)
 		return
 
-	label_dict = {str(i): v for i, v in enumerate(labels)}
+	label_dict = {str(i): v for i, v in enumerate(all_emotions)}
 	data = read_file(os.path.join(args.data_dir, args.train_file), 
 					all_emotions,
 					label_dict)
@@ -99,7 +99,17 @@ def main():
 	print("{} training examples".format(len(data)))
 
 	print("++++++++++++Distribution of number of labels per example++++++++++++")
+	# pd.set_option('display.max_rows', 500)
+	# pd.set_option('display.max_columns', 500)
+	# pd.set_option('display.width', 1000)
+
 	print(data[all_emotions].sum(axis=1).value_counts() / len(data))
+	# m_desire = (data[all_emotions].sum(axis=1) > 1) & (data['desire'] == 1)
+	# m_remorse = (data[all_emotions].sum(axis=1) > 1) & (data['remorse'] == 1)
+	# print(data[m_desire].shape)
+	# print(data[m_remorse].shape)
+	# print((data[all_emotions].sum(axis=1) >= 2).sum())
+
 	print("%.5f with more than 3 labels" %
 				((data[all_emotions].sum(axis=1) > 3).sum() /
 				 len(data)))  # more than 3 labels

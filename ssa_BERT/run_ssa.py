@@ -86,8 +86,8 @@ parser.add_argument("--cache_dir",
 					type=str,
 					help="Where do you want to store the pre-trained models downloaded from s3")
 parser.add_argument("--max_seq_length",
-					default=128,
-					# default=50,
+					# default=128,
+					default=50,
 					type=int,
 					help="The maximum total input sequence length after WordPiece tokenization. \n"
 						 "Sequences longer than this will be truncated, and sequences shorter \n"
@@ -371,6 +371,7 @@ def main(args):
 	# use bert to aug train_examples
 	ori_train_examples = processor.get_train_examples(args.data_dir)
 	eval_examples = processor.get_dev_examples(args.data_dir)
+	test_examples = processor.get_test_examples(args.data_dir)
 
 	num_train_optimization_steps = int(
 		len(ori_train_examples) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
@@ -558,9 +559,20 @@ def main(args):
 				else:
 					tmp_acc = eval_res["corr"]
 
+
+				result = {'eval_total_loss': eval_loss,
+						  'eval_seq_loss': eval_seq_loss,
+						  'eval_aug_loss': eval_aug_loss,
+						  'eval_aug_accuracy': eval_aug_accuracy,
+						  'global_step': global_step,
+						  'train_loss': train_loss,
+						  'train_batch_size': args.train_batch_size,
+						  'args': args}
+
 				if tmp_acc >= best_val_acc:
 					best_val_acc = tmp_acc
 					dev_test = "dev"
+					result.update({'best_epoch': epoch})
 
 					model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
 					output_model_dir = os.path.join(args.output_dir, "dev_" + str(tmp_acc))
@@ -572,41 +584,16 @@ def main(args):
 					with open(output_config_file, 'w') as f:
 						f.write(model_to_save.config.to_json_string())
 
-					result = {'eval_total_loss': eval_loss,
-							  'eval_seq_loss': eval_seq_loss,
-							  'eval_aug_loss': eval_aug_loss,
-							  'eval_aug_accuracy': eval_aug_accuracy,
-							  'global_step': global_step,
-							  'train_loss': train_loss,
-							  'best_epoch': epoch,
-							  'train_batch_size': args.train_batch_size,
-							  'args': args}
+				result.update(eval_res)
+				result.update(res_parts)
 
-					result.update(eval_res)
-					result.update(res_parts)
-
-					output_eval_file = os.path.join(args.output_dir,
-													dev_test + "_results_" + str(tmp_acc) + ".txt")
-					with open(output_eval_file, "w") as writer:
-						logger.info("****************************** eval results ***********************************")
-						for key in sorted(result.keys()):
-							logger.info("  %s = %s", key, str(result[key]))
-							writer.write("%s = %s\n" % (key, str(result[key])))
-
-					# write test results
-					if args.do_test:
-						res_file = os.path.join(args.output_dir,
-													"test_" + str(tmp_acc)+".tsv")
-
-						idx, preds = do_test(args, label_list, task_name, processor, tokenizer, output_mode, model)
-
-						dataframe = pd.DataFrame({'index': range(idx), 'prediction': preds})
-						dataframe.to_csv(res_file, index=False, sep='\t')
-						logger.info("  Num test length = %d", idx)
-						logger.info("*********************************** test done ***********************************")
-
-				else:
-					logger.info("  tmp_val_acc = %f", tmp_acc)
+				# output_eval_file = os.path.join(args.output_dir,
+				# 								dev_test + "_results_" + str(tmp_acc) + ".txt")
+				# with open(output_eval_file, "w") as writer:
+				logger.info("****************************** eval results ***********************************")
+				for key in sorted(result.keys()):
+					logger.info("  %s = %s", key, str(result[key]))
+					# writer.write("%s = %s\n" % (key, str(result[key])))
 			else:
 				result = {'eval_total_loss': eval_loss,
 						  'eval_seq_loss': eval_seq_loss,
@@ -622,6 +609,38 @@ def main(args):
 				logger.info("****************************** eval results ***********************************")
 				for key in sorted(result.keys()):
 					logger.info("  %s = %s", key, str(result[key]))
+
+			# write test results
+			if args.do_test:
+				# res_file = os.path.join(args.output_dir,
+				# 							"test_" + str(tmp_acc)+".tsv")
+
+				# idx, preds = do_test(args, label_list, task_name, processor, tokenizer, output_mode, model)
+
+				# dataframe = pd.DataFrame({'index': range(idx), 'prediction': preds})
+				# dataframe.to_csv(res_file, index=False, sep='\t')
+				# logger.info("  Num test length = %d", idx)
+				logger.info("*********************************** Running test ***********************************")
+				logger.info("  Num examples = %d", len(test_examples))
+				logger.info("  Batch size = %d", args.eval_batch_size)
+				
+				test_loss, test_seq_loss, test_aug_loss, test_res, test_aug_accuracy, res_parts=\
+					do_evaluate(args, processor, label_list, tokenizer, model, epoch, output_mode, num_labels, task_name, test_examples, type="test")
+				result = {'test_total_loss': test_loss,
+						  'test_seq_loss': test_seq_loss,
+						  'test_aug_loss': test_aug_loss,
+						  'test_aug_accuracy': test_aug_accuracy,
+						  'global_step': global_step,
+						  'args': args}
+				result.update(test_res)
+				result.update(res_parts)
+
+				logger.info("****************************** test results ***********************************")
+				for key in sorted(result.keys()):
+					logger.info("  %s = %s", key, str(result[key]))
+
+				logger.info("*********************************** test done ***********************************")
+
 
 
 
@@ -724,16 +743,16 @@ def do_evaluate(args, processor, label_list, tokenizer, model, epoch, output_mod
 					aug_avg = eval_aug_accuracy / nb_eval_tokens
 				else:
 					aug_avg = 0.0
-				log_string = ""
-				log_string += "epoch={:<5d}".format(epoch)
-				log_string += " total_loss={:<9.7f}".format(loss)
-				log_string += " seq_loss={:<9.7f}".format(seq_loss)
-				log_string += " aug_loss={:<9.7f}".format(aug_loss)
-				#log_string += " valid_seq_acc={:<9.7f}".format(seq_avg)
-				log_string += " valid_aug_acc={:<9.7f}".format(aug_avg)
-				for key in sorted(res.keys()):
-					log_string += "  "+key+"= "+str(res[key])
-				logger.info(log_string)
+				# log_string = ""
+				# log_string += "epoch={:<5d}".format(epoch)
+				# log_string += " total_loss={:<9.7f}".format(loss)
+				# log_string += " seq_loss={:<9.7f}".format(seq_loss)
+				# log_string += " aug_loss={:<9.7f}".format(aug_loss)
+				# #log_string += " valid_seq_acc={:<9.7f}".format(seq_avg)
+				# log_string += " valid_aug_acc={:<9.7f}".format(aug_avg)
+				# for key in sorted(res.keys()):
+				# 	log_string += "  "+key+"= "+str(res[key])
+				# logger.info(log_string)
 
 
 		eval_loss = eval_loss / nb_eval_steps

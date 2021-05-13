@@ -81,8 +81,12 @@ def train(args,
 
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch")
-    for _ in train_iterator:
+    for epoch in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration")
+
+        train_loss = 0.0
+        train_steps = 0
+        preds = None
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
@@ -94,7 +98,20 @@ def train(args,
             }
             outputs = model(**inputs)
 
-            loss = outputs[0]
+            loss, logits = outputs[:2]
+
+
+
+            train_loss += loss
+            train_steps += 1
+            if preds is None:
+                preds = 1 / (1 + np.exp(-logits.detach().cpu().numpy()))  # Sigmoid
+                out_label_ids = inputs["labels"].detach().cpu().numpy()
+            else:
+                preds = np.append(preds, 1 / (1 + np.exp(-logits.detach().cpu().numpy())), axis=0)  # Sigmoid
+                out_label_ids = np.append(out_label_ids, inputs["labels"].detach().cpu().numpy(), axis=0)
+
+
 
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
@@ -139,6 +156,19 @@ def train(args,
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 break
+
+        train_loss = train_loss / train_steps
+        results = {
+            "loss": train_loss
+        }
+        preds[preds > args.threshold] = 1
+        preds[preds <= args.threshold] = 0
+        result = compute_metrics(out_label_ids, preds)
+        results.update(result)
+
+        logger.info("***** Train results on train dataset for epoch {} *****".format(epoch))
+        for key in sorted(results.keys()):
+            logger.info("  {} = {}".format(key, str(results[key])))
 
         if args.max_steps > 0 and global_step > args.max_steps:
             break
